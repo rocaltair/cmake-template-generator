@@ -1,0 +1,89 @@
+#!/bin/sh
+
+create_cmakelists()
+{
+cat << EOF
+
+#INCLUDE(/path/to/another/CMakeLists.txt)
+cmake_minimum_required(VERSION 2.5)
+set(CMAKE_VERBOSE_MAKEFILE on)
+set(CMAKE_C_COMPILER "gcc")
+set(CMAKE_CXX_COMPILER "g++")
+set(CMAKE_CXX_FLAGS "-Wall")
+set(CMAKE_CXX_FLAGS_DEBUG "-g3 -Wall")
+set(CMAKE_CXX_FLAGS_RELEASE "-O2 -Wall")
+
+project(myproject_name)
+set(EXECUTE_FILE a.out)
+set(EXECUTABLE_OUTPUT_PATH bin)
+
+#option(ENABLE_TCMALLOC "enable tcmalloc of google" ON)
+
+set(SRC_DIRS
+	.
+)
+
+#add_subdirectory(SRC_DIR
+#	subdir
+#)
+
+include_directories(
+	.
+#	./include
+)
+link_directories(
+#	./lib
+)
+
+#set(SRC_LIST 
+#	main.c
+#)
+
+#add_library(libname STATIC
+#	libxxx.c
+#)
+
+foreach(dir \${SRC_DIRS})
+	AUX_SOURCE_DIRECTORY(\${dir}  SRC_LIST)
+endforeach(dir)
+
+############# 
+#list(REMOVE_ITEM SRC_LIST 
+#	luawrap/lsqlite3.c
+#)
+#############
+
+function (push)
+endfunction (push)
+
+add_executable(\${EXECUTE_FILE} \${SRC_LIST})
+
+if(\${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
+	message("== <CMAKE_SYSTEM_NAME> " \${CMAKE_SYSTEM_NAME})
+	list(APPEND LIB_LIST
+		m
+	)
+endif()
+
+target_link_libraries(\${EXECUTE_FILE} 
+	\${LIB_LIST}
+)
+
+foreach(item \${SRC_LIST})
+	MESSAGE("--<SOURCE> " \${item})
+endforeach(item)
+
+foreach(item \${LIB_LIST})
+	MESSAGE("--<LIBRARY> " \${item})
+endforeach(item)
+
+EOF
+}
+
+if [ -f CMakeLists.txt ]; then
+	echo "CMakeLists.txt exists!!!!" >&2
+	exit 1
+fi
+
+create_cmakelists > CMakeLists.txt
+
