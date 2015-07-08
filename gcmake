@@ -1,9 +1,63 @@
 #!/bin/sh
 
-create_cmakelists()
+#!/bin/bash
+
+dir_list=()
+lib_list=()
+src_list=()
+include_list=()
+
+default_output=mytest
+output=$default_output
+
+stat=null
+template_mode=dir
+
+while [ $# -gt 0 ]; do
+	arg=$1
+	shift
+	if [ $arg = "-d" ]; then
+		stat="dir"
+		continue
+	elif [ $arg = "-l" ]; then
+		stat="lib"
+		continue
+	elif [ $arg = "-s" ]; then
+		stat="src"
+		continue
+	elif [ $arg = "-i" ]; then
+		stat="include"
+		continue
+	elif [ $arg = "-t" ]; then
+		template_mode="test"
+		continue
+	elif [ $arg = "-o" ]; then
+		stat="output"
+		continue
+	fi
+	
+	if [ $stat = dir ]; then
+		dir_list+=($arg)
+	elif [ $stat = lib ]; then
+		lib_list+=($arg)
+	elif [ $stat = include ]; then
+		include_list+=($arg)
+	elif [ $stat = src ]; then
+		src_list+=($arg)
+	elif [ $stat = output ]; then
+		if [ $output != $default_output ]; then
+			echo "only one argument required for -o !!!" >&2
+			exit 1
+		fi
+		output=$arg
+	fi
+done
+
+myproject_name=$(basename ${PWD})
+
+create_header()
 {
 cat << EOF
-
 #INCLUDE(/path/to/another/CMakeLists.txt)
 cmake_minimum_required(VERSION 2.5)
 set(CMAKE_VERBOSE_MAKEFILE on)
@@ -13,30 +67,87 @@ set(CMAKE_CXX_FLAGS "-Wall")
 set(CMAKE_CXX_FLAGS_DEBUG "-g3 -Wall")
 set(CMAKE_CXX_FLAGS_RELEASE "-O2 -Wall")
 
-project(myproject_name)
-set(EXECUTE_FILE a.out)
+project(proj_${myproject_name})
+
+link_directories(
+)
+
+EOF
+}
+
+create_tailer()
+{
+cat << EOF
+message("== <CMAKE_SYSTEM_NAME> " \${CMAKE_SYSTEM_NAME})
+foreach(item \${SRC_LIST})
+	MESSAGE("--<SOURCE> " \${item})
+endforeach(item)
+
+foreach(item \${LIB_LIST})
+	MESSAGE("--<LIBRARY> " \${item})
+endforeach(item)
+EOF
+}
+
+create_src_cmake()
+{
+cat << EOF
+set(EXECUTABLE_OUTPUT_PATH bin)
+include_directories(
+	.
+	..
+	${include_list[@]}
+)
+function (mktarget output src_list lib_list)
+        set(EXECUTE_NAME \${output})
+        set(EXECUTE_NAME_SRC_LIST
+                \${src_list}
+        )
+        foreach(item \${EXECUTE_NAME_SRC_LIST})
+                message("== <SOURCE> for \${output} : \${item}")
+        endforeach()
+        add_executable(\${EXECUTE_NAME} \${EXECUTE_NAME_SRC_LIST})
+	target_link_libraries(\${EXECUTE_NAME} 
+		\${lib_list}
+	)
+endfunction()
+
+##############################################
+set(src_list
+	${src_list[@]}
+)
+set(lib_list ${lib_list[@]})
+mktarget(${output} "\${src_list}" "\${lib_list}")
+##############################################
+
+EOF
+}
+
+create_dir_cmake()
+{
+cat << EOF
+
+include_directories(
+	.
+	${include_list[@]}
+)
+set(EXECUTE_FILE ${output})
 set(EXECUTABLE_OUTPUT_PATH bin)
 
 #option(ENABLE_TCMALLOC "enable tcmalloc of google" ON)
 
 set(SRC_DIRS
 	.
+	${dir_list[@]}
 )
 
 #add_subdirectory(SRC_DIR
 #	subdir
 #)
 
-include_directories(
-	.
-#	./include
-)
-link_directories(
-#	./lib
-)
-
 #set(SRC_LIST 
 #	main.c
+#	${src_list[@]}
 #)
 
 #add_library(libname STATIC
@@ -56,26 +167,14 @@ endforeach(dir)
 function (push)
 endfunction (push)
 
+list(APPEND LIB_LIST
+	${lib_list[@]}
+)
+
 add_executable(\${EXECUTE_FILE} \${SRC_LIST})
-
-if(\${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
-	message("== <CMAKE_SYSTEM_NAME> " \${CMAKE_SYSTEM_NAME})
-	list(APPEND LIB_LIST
-		m
-	)
-endif()
-
 target_link_libraries(\${EXECUTE_FILE} 
 	\${LIB_LIST}
 )
-
-foreach(item \${SRC_LIST})
-	MESSAGE("--<SOURCE> " \${item})
-endforeach(item)
-
-foreach(item \${LIB_LIST})
-	MESSAGE("--<LIBRARY> " \${item})
-endforeach(item)
 
 EOF
 }
@@ -85,5 +184,9 @@ if [ -f CMakeLists.txt ]; then
 	exit 1
 fi
 
-create_cmakelists > CMakeLists.txt
+if [ $template_mode = dir ]; then
+	(create_header; create_dir_cmake; create_tailer) > CMakeLists.txt
+else
+	(create_header; create_src_cmake) > CMakeLists.txt
+fi
 
